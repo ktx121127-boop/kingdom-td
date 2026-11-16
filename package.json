@@ -1,0 +1,7 @@
+{
+  "name": "kingdom-td",
+  "version": "1.0.0",
+  "private": true,
+  "description": "왕국 수비대 - 판타지 타워 디펜스",
+  "engines": { "node": ">=18" }
+}

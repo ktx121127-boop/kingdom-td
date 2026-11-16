@@ -174,7 +174,7 @@ input{background:#070b17;border:1px solid #3d5486;box-shadow:inset 0 2px 4px #00
 <input id="em" type="email" placeholder="이메일" autocomplete="email">
 <input id="pw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password">
 <input id="pw2" type="password" placeholder="비밀번호 확인" autocomplete="new-password" hidden>
-<div id="lerr"></div>
+<div id="lerr"></div><div id="lsrv" style="font-size:12px;color:#8fa596;margin:4px 0;min-height:16px"></div>
 <button id="lg" class="gold" style="padding:12px">로그인</button>
 <div class="or">또는</div>
 <button onclick="guest()">👤 게스트로 시작</button>
@@ -211,28 +211,41 @@ const OT=['견습 병사','사냥꾼','엘프 궁수','마법사','흡혈귀','�
 function mig(p){if(p&&!p.v){const nt={},na={},ti=k=>TL.findIndex(t=>(t.on||t.n)==OT[k]);for(const k in p.tw){const i=ti(k);if(i>=0)nt[i]=p.tw[k]}for(const k in p.ar){const[i,g]=k.split('_'),j=AF.findIndex(a=>a[0]==OA[i]);if(j>=0)na[j+'_'+g]=p.ar[k]}p.deck=p.deck.map(k=>ti(k)).filter(i=>i>=0);p.tw=nt;p.ar=na;p.v=2}return p}
 let P,EM,tab='play',R=[],msg='',selT=null;
 const load=e=>{try{return JSON.parse(localStorage.getItem('td:'+e))}catch(_){return null}};
+/* ---- Vercel 서버 연결: claude.ai 밖에서 열렸을 때만, /api/ping 이 성공하면 켜져요 ---- */
+let SRV=null,AM='local';const TK='tdtok',TI='tdid';
+const gls=k=>{try{return localStorage.getItem(k)||''}catch(_){return ''}},sls=(k,v)=>{try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(_){}};
+async function api(p,b){const h={'content-type':'application/json'},t=gls(TK);if(t)h.authorization='Bearer '+t;const r=await fetch('/api/'+p,{method:'POST',headers:h,body:JSON.stringify(b)});return r.json()}
+const VSR=(async()=>{if(typeof claude!='undefined'||location.protocol=='file:')return;
+ try{const c=new AbortController(),tm=setTimeout(()=>c.abort(),4000);const r=await fetch('/api/ping',{signal:c.signal});clearTimeout(tm);const j=await r.json();
+  if(!j||!j.ok)return;if(!j.kv){SRV={err:'nokv'};return}SRV={ok:1};
+  const call=async b=>{const r=await api('db',b);if(r.err)throw new Error(r.err);return r};
+  const snap=r=>({exists:!!r.exists,data:()=>r.data}),qsnap=r=>{const d=(r.docs||[]).map(x=>({id:x.id,data:()=>x.data}));return{docs:d,size:d.length,empty:!d.length,forEach:f=>d.forEach(f)}};
+  const col=(path,q)=>({doc:id=>{const p=path+'/'+id;return{id,get:async()=>snap(await call({op:'get',path:p})),set:async d=>{await call({op:'set',path:p,data:d})},delete:async()=>{await call({op:'delete',path:p})}}},
+   where:(f,o,v)=>col(path,Object.assign({},q,{where:((q&&q.where)||[]).concat([[f,o,v]])})),orderBy:(f,d)=>col(path,Object.assign({},q,{orderBy:f,dir:d})),limit:n=>col(path,Object.assign({},q,{limit:n})),
+   get:async()=>qsnap(await call(Object.assign({op:'query',coll:path},q)))});
+  window.claude={use:async n=>n=='user'?{id:async()=>gls(TI)||null}:n=='db'?{collection:p=>col(p)}:null}}catch(_){}})();
 let NOCL=0;
-const tmo=(p,ms)=>new Promise((res,rej)=>{let d=0;const t=setTimeout(()=>{if(!d){d=1;NOCL=1;rej(new Error('timeout'))}},ms||2500);Promise.resolve(p).then(v=>{if(!d){d=1;clearTimeout(t);res(v)}},e=>{if(!d){d=1;clearTimeout(t);NOCL=1;rej(e)}})});
+const tmo=(p,ms)=>new Promise((res,rej)=>{let d=0;const t=setTimeout(()=>{if(!d){d=1;NOCL=1;rej(new Error('timeout'))}},ms||7000);Promise.resolve(p).then(v=>{if(!d){d=1;clearTimeout(t);res(v)}},e=>{if(!d){d=1;clearTimeout(t);NOCL=1;rej(e)}})});
 let CL=null,SY=0,cb=0,cq=0;
 const hash=s=>{let h=5381;for(const c of s)h=((h<<5)+h+c.charCodeAt(0))|0;return (h>>>0).toString(16)};
 const save=()=>{if(!P)return;P.ts=Date.now();try{const j=JSON.stringify(P);localStorage.setItem('td:'+EM,j);const t=Date.now();if(t-(window.__bk||0)>6e4){window.__bk=t;localStorage.setItem('tdbak:'+EM,j)}}catch(_){}cloudQ()};
 async function cloudQ(){if(!CL)return;cq=1;if(cb)return;cb=1;while(cq){cq=0;try{await tmo(CL.set({json:JSON.stringify(P),ts:P.ts}));SY=1}catch(e){SY=2}await new Promise(r=>setTimeout(r,2500))}cb=0}
-async function cloud(){try{if(NOCL||typeof claude=='undefined')return;const[u,db]=await tmo(Promise.all([claude.use('user'),claude.use('db')]));if(!u||!db)return;const id=await tmo(u.id());if(!id)return;
+async function cloud(){try{await VSR;if(NOCL||typeof claude=='undefined')return;const[u,db]=await tmo(Promise.all([claude.use('user'),claude.use('db')]));if(!u||!db)return;const id=await tmo(u.id());if(!id)return;
  CL=db.collection('data/users/'+id).doc('s'+hash(EM));const sn=await tmo(CL.get());
  if(sn.exists){const r=JSON.parse(sn.data().json);if((r.ts||0)>(P.ts||0)){P=nz(r);try{localStorage.setItem('td:'+EM,JSON.stringify(P))}catch(_){}SY=1;if(!$('lobby').hidden&&$('app').hidden)render();return}}
  SY=1;cloudQ();if(!$('lobby').hidden&&$('app').hidden)render()}catch(e){SY=SY||0}}
 const EGM=[1,2,3.2,5,8,14],EC2=['#ff6a4a','#4fd0ff','#ffe14a','#ffa63a','#9fe8ff','#ff8ad8','#c58bff','#ff4a6a','#7fe0ff','#e6b94a','#8fff8a','#ff7a3a','#6a9aff','#f2c640'],ENC=[['공격력','d',.06],['사거리','r',.04],['공격속도','s',.05],['치명타 확률','c',.02],['스킬 쿨타임 감소','k',.04],['범위 반경','p',.05],['스킬 위력','m',.06],['치명타 피해','x',.08],['둔화 강화(서리 계열)','z',.06],['보스 피해','b',.07],['연속 사격 확률','u',.03],['화상 (초당 피해)','f',.03],['스킬 범위','v',.05],['설치 비용 할인','e',.02]],ER=[45,28,16,8,2.5,.5],EC=3,LIM=[99,99,10,8,6,4];
 const nz=p=>{p.gt=0;p.en={};if(p.ench){p.gem=(p.gem||0)+p.ench*30;p.ench=0}p.ench=0;p.mu=p.mu||1;p.sm=p.sm||0;p.xp=p.xp||0;p.ev=p.ev||{};p.att=p.att||{d:'',n:0};p.ac=p.ac||{};p.deck=(p.deck||[]).slice(0,5);p.eq=p.eq||{};p.ul=p.ul||{};p.evd=p.evd||{};p.tapp=p.tapp||{};p.tsd=p.tsd||{};return p};
 try{const l=localStorage.getItem('td:last');if(l&&l.includes('@'))$('em').value=l}catch(_){}
-let lm=0;
+let lm=0;VSR.then(()=>{const el=$('lsrv');if(!el)return;el.textContent=SRV&&SRV.ok?'☁️ 서버 연결됨 · 친구·거래·랭킹 사용 가능':SRV&&SRV.err=='nokv'?'⚠️ 서버 저장소 미설정 · 이 기기에서만 저장돼요':''});
 function lmode(m){lm=m;$('tl').classList.toggle('on',!m);$('ts').classList.toggle('on',!!m);$('nk').hidden=!m;$('pw2').hidden=!m;$('lg').textContent=m?'회원가입':'로그인';$('lerr').textContent='';$('pw').autocomplete=m?'new-password':'current-password'}
 const sha=async s=>{try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(_){return hash(s)+hash(s.split('').reverse().join(''))}};
 const ACK='tdacc:';
-async function cdoc(e){if(NOCL||typeof claude=='undefined')return null;const[u,db]=await tmo(Promise.all([claude.use('user'),claude.use('db')]));if(!u||!db)return null;const id=await tmo(u.id());return id?db.collection('data/users/'+id).doc('a'+hash(e)):null}
+async function cdoc(e){await VSR;if(NOCL||typeof claude=='undefined')return null;const[u,db]=await tmo(Promise.all([claude.use('user'),claude.use('db')]));if(!u||!db)return null;const id=await tmo(u.id());return id?db.collection('data/users/'+id).doc('a'+hash(e)):null}
 async function getAcc(e){try{const a=JSON.parse(localStorage.getItem(ACK+e));if(a)return a}catch(_){}
  try{const d=await cdoc(e);if(d){const sn=await tmo(d.get());if(sn.exists){const a=JSON.parse(sn.data().json);try{localStorage.setItem(ACK+e,JSON.stringify(a))}catch(_){}return a}}}catch(_){}return null}
 async function putAcc(e,a){try{localStorage.setItem(ACK+e,JSON.stringify(a))}catch(_){}try{const d=await cdoc(e);if(d)await tmo(d.set({json:JSON.stringify(a)}))}catch(_){}}
-function enter(e,nick,nw){EM=e;P=nz(mig(load(e))||{v:2,gem:1000,tw:{0:1,2:1},ar:{},deck:[0,2]});if(nick&&!P.nick)P.nick=nick;try{localStorage.setItem('td:last',e);localStorage.setItem('td:ses',e)}catch(_){}save();$('login').hidden=1;$('lobby').hidden=0;lobby();cloud();socInit()}
+function enter(e,nick,nw,meth){EM=e;AM=e=='guest'?'guest':(meth||gls('td:am')||'local');sls('td:am',AM);P=nz(mig(load(e))||{v:2,gem:1000,tw:{0:1,2:1},ar:{},deck:[0,2]});if(nick&&!P.nick)P.nick=nick;try{localStorage.setItem('td:last',e);localStorage.setItem('td:ses',e)}catch(_){}save();$('login').hidden=1;$('lobby').hidden=0;lobby();cloud();socInit();if(AM=='server')VSR.then(()=>SRV&&SRV.ok?api('auth',{action:'me'}):0).then(r=>{if(r&&r.err=='auth'){logout();$('lerr').textContent='로그인이 만료됐어요. 다시 로그인해 주세요'}}).catch(()=>{})}
 /* ---- 친구 / 거래 (아티팩트 공유 DB: pub/<내 id> 문서에 내 정보만 기록) ---- */
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let SOC=null,frMsg='',soBusy=0,soQ=Promise.resolve();
@@ -246,7 +259,8 @@ function soWrite(){const s=SOC;if(!s||!s.ok)return Promise.resolve();const m=s.m
  soQ=soQ.then(()=>stm(s.ref.set(body))).catch(e=>{s.ro=1;throw e});return soQ}
 async function socInit(){
  if(SOC&&SOC.ok&&SOC.em==EM)return;
- if(typeof claude=='undefined'){SOC={ok:0,err:'친구·거래는 claude.ai에서 연 아티팩트에서만 쓸 수 있어요.'};return}
+ await VSR;
+ if(typeof claude=='undefined'){SOC={ok:0,err:SRV&&SRV.err=='nokv'?'서버 저장소(Upstash Redis)가 아직 연결되지 않았어요. Vercel 설정을 확인해 주세요.':'친구·거래·랭킹은 서버(Vercel) 또는 claude.ai에서 연 아티팩트에서만 쓸 수 있어요.'};return}
  if(!EM||EM=='guest'){SOC={ok:0,err:'게스트는 친구·거래를 쓸 수 없어요. 회원가입 후 이용해 주세요.'};return}
  try{const[u,db]=await stm(Promise.all([claude.use('user'),claude.use('db')]));
   if(!u||!db){SOC={ok:0,err:'claude.ai에 로그인해야 친구·거래를 쓸 수 있어요.'};return}
@@ -371,18 +385,29 @@ $('lg').onclick=async()=>{const e=$('em').value.trim().toLowerCase(),pw=$('pw').
  if(!/^\S+@\S+\.\S+$/.test(e)){er.textContent='올바른 이메일을 입력해 주세요';return}
  if(pw.length<6){er.textContent='비밀번호는 6자 이상이에요';return}
  $('lg').disabled=true;er.textContent='처리 중…';
- try{const a=await getAcc(e);
+ try{await VSR;
+  if(SRV&&SRV.ok){const AE={email:'올바른 이메일을 입력해 주세요',pw:'비밀번호는 6자 이상이에요',nick:'닉네임은 2자 이상이에요',exists:'이미 가입된 이메일이에요. 로그인해 주세요',nouser:'가입되지 않은 이메일이에요. 회원가입을 해 주세요',badpw:'비밀번호가 맞지 않아요',rate:'시도가 너무 많아요. 5분 뒤에 다시 해 주세요',nokv:'서버 저장소가 아직 설정되지 않았어요',server:'서버 오류예요. 잠시 후 다시 시도해 주세요'};
+   let r;
+   if(lm){const nk=$('nk').value.trim();if(nk.length<2){er.textContent=AE.nick;return}if(pw!=$('pw2').value){er.textContent='비밀번호가 서로 달라요';return}r=await api('auth',{action:'signup',email:e,pw,nick:nk})}
+   else{r=await api('auth',{action:'login',email:e,pw});
+    if(r.err=='nouser'){const a=await getAcc(e);if(a&&await sha(a.s+pw)==a.h)r=await api('auth',{action:'signup',email:e,pw,nick:a.n})}}
+   if(r.err){er.textContent=AE[r.err]||'오류: '+r.err;return}
+   sls(TK,r.token);sls(TI,r.id);SOC=null;enter(e,r.nick,0,'server');return}
+  const a=await getAcc(e);
   if(lm){const nk=$('nk').value.trim();
    if(nk.length<2){er.textContent='닉네임은 2자 이상이에요';return}
    if(pw!=$('pw2').value){er.textContent='비밀번호가 서로 달라요';return}
    if(a){er.textContent='이미 가입된 이메일이에요. 로그인해 주세요';return}
-   const salt=Math.random().toString(36).slice(2,10);await putAcc(e,{n:nk,s:salt,h:await sha(salt+pw),t:Date.now()});enter(e,nk)}
+   const salt=Math.random().toString(36).slice(2,10);await putAcc(e,{n:nk,s:salt,h:await sha(salt+pw),t:Date.now()});enter(e,nk,0,'local')}
   else{if(!a){er.textContent='가입되지 않은 이메일이에요. 회원가입을 해 주세요';return}
-   if(await sha(a.s+pw)!=a.h){er.textContent='비밀번호가 맞지 않아요';return}enter(e,a.n)}
+   if(await sha(a.s+pw)!=a.h){er.textContent='비밀번호가 맞지 않아요';return}enter(e,a.n,0,'local')}
  }catch(x){er.textContent='오류: '+(x&&x.message||x)}finally{$('lg').disabled=false}};
-function guest(){enter('guest','게스트')}
+function acInfo(){const real=typeof claude!='undefined'&&!(SRV&&SRV.ok);
+ return AM=='guest'?{m:'게스트',d:'저장이 이 기기에만 남고 친구·거래·랭킹은 쓸 수 없어요',i:'👤'}:AM=='server'?{m:'서버 계정 (이메일 가입)',d:'어느 기기에서든 같은 이메일로 로그인하면 이어져요',i:'☁️'}:real?{m:'claude.ai 연동 계정',d:'이메일 가입 정보가 claude.ai 계정에 저장돼요',i:'🔗'}:{m:'이 기기 계정',d:'이 기기에만 저장된 계정이에요. 저장 코드로 옮길 수 있어요',i:'💾'}}
+function acView(){const a=acInfo();const el=sheet('내 계정',`<div class="card" style="line-height:1.9"><div>${a.i} <b>${esc(a.m)}</b></div><div>✉️ ${EM=='guest'?'가입 안 함':esc(EM)}</div><div>🙂 닉네임 ${esc(P.nick||'-')}</div><div class="mu" style="font-size:12px">${esc(a.d)}</div><div class="mu" style="font-size:12px">${SY==1?'☁️ 클라우드 동기화됨':SY==2?'⚠️ 동기화 실패':'💾 이 기기에만 저장 중'}${SOC&&SOC.ok?' · 친구·거래·랭킹 연결됨':''}</div></div><button id="alo" class="gold" style="width:100%;margin-top:10px;padding:12px">로그아웃</button>`);$('alo').onclick=()=>{el.remove();logout()}}
+function guest(){sls(TK,'');sls(TI,'');enter('guest','게스트',0,'guest')}
 function soc(p){const el=sheet(p+' 로그인',`<p class="mu" style="font-size:14px;line-height:1.6">${p} 로그인은 서비스 제공자에 앱을 등록해 발급받는 키와, 로그인을 검증하는 인증 서버가 있어야 해요. 이 게임은 아직 서버가 없어서 연결하지 못했어요.<br><br>지금은 <b>이메일 회원가입</b>으로 이용할 수 있어요.</p><button class="gold" id="so" style="width:100%;padding:12px">이메일로 회원가입</button>`);$('so').onclick=()=>{el.remove();lmode(1)}}
-function logout(){if(P)save();try{localStorage.removeItem('td:ses')}catch(_){}P=null;EM=null;CL=null;SY=0;$('lobby').hidden=1;$('login').hidden=0;$('pw').value='';$('pw2').value='';$('lerr').textContent='';lmode(0)}
+function logout(){if(P)save();try{localStorage.removeItem('td:ses')}catch(_){}if(AM=='server'){api('auth',{action:'logout'}).catch(()=>{})}sls(TK,'');sls(TI,'');SOC=null;P=null;EM=null;CL=null;SY=0;$('lobby').hidden=1;$('login').hidden=0;$('pw').value='';$('pw2').value='';$('lerr').textContent='';lmode(0)}
 const fmt=(a,v)=>'+'+(a[3]<1?Math.round(v*100)+'%':Math.round(v));
 const shade=(h,k)=>{const n=parseInt(h.slice(1),16),f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return '#'+((1<<24)+(f(n>>16)<<16)+(f((n>>8)&255)<<8)+f(n&255)).toString(16).slice(1)};
 const XT={'인어 사제':'fish','지니':'smoke','흡혈귀':'fang','어둠술사':'fang','해적 선장':'pirate'};
@@ -500,18 +525,25 @@ function lzD(by){const d=[];let nx=256,acc=0,ab=0,i=0,prev=null,out='',first=1;
   let e;if(prev===null){e=ent(c)}else{if(c<nx)e=ent(c);else e=prev+prev[0];d.push(prev+e[0]);nx++}
   out+=e;prev=e;first=0}
  return out}
-const pk2=m=>Object.entries(m||{}).filter(([k,v])=>v).map(([k,v])=>v==1?k:k+'x'+v).join(','),up2=t=>{const o={};if(t)t.split(',').forEach(x=>{const[k,v]=x.split('x');o[k]=v?+v:1});return o};
-const KEEP=new Set(['v','gem','xp','ts']);
+const pk1=m=>Object.entries(m||{}).filter(([k,v])=>v).map(([k,v])=>(/^\d+$/.test(k)?'~'+(+k).toString(36):k)+(v==1?'':'x'+v)).join(',');
+const kix=(k,t)=>{if(t=='#')return/^\d+$/.test(k)?+k:-1;const m=/^(\d+)_(\d)$/.exec(k);return m&&+m[2]<6?+m[1]*6+ +m[2]:-1},ixk=(n,t)=>t=='#'?''+n:Math.floor(n/6)+'_'+n%6;
+function pk2(m){const a=pk1(m),e=Object.entries(m||{}).filter(([k,v])=>v);if(e.length<12)return a;
+ for(const t of ['#','@']){const ix=e.map(([k])=>kix(k,t));if(ix.some(x=>x<0))continue;const mx=Math.max(...ix),n=Math.ceil((mx+1)/6),b=new Array(n).fill(0);ix.forEach(x=>b[x/6|0]|=1<<(x%6));
+  const ex=pk1(Object.fromEntries(e.filter(([k,v])=>v!=1)));const r=t+b.map(x=>B64[x]).join('')+(ex?','+ex:'');return r.length<a.length?r:a}return a}
+const up2=t=>{const o={};if(!t)return o;let L=t.split(',');const h=L[0];if(h[0]=='#'||h[0]=='@'){const ty=h[0];for(let i=1;i<h.length;i++){const v=B64.indexOf(h[i]);for(let j=0;j<6;j++)if(v>>j&1)o[ixk((i-1)*6+j,ty)]=1}L=L.slice(1)}
+ L.forEach(x=>{const[k,v]=x.split('x');o[k[0]=='~'?parseInt(k.slice(1),36):k]=v?+v:1});return o};
+const isEmp=v=>v===0||v===''||v===false||v==null||(Array.isArray(v)?!v.length:typeof v=='object'&&Object.values(v).every(isEmp)),KEEP=new Set(['v','gem','xp','ts']),N36=n=>(+n||0).toString(36);
 function enc(o){const p=Object.assign({},o.p);for(const k of ['tw','ar','ul'])if(p[k]&&typeof p[k]=='object')p[k]=pk2(p[k]);
- for(const k of Object.keys(p)){const v=p[k];if(KEEP.has(k))continue;if(v===0||v===''||v===false||v==null||(Array.isArray(v)&&!v.length)||(typeof v=='object'&&!Array.isArray(v)&&!Object.keys(v).length))delete p[k]}
- const j=unescape(encodeURIComponent(JSON.stringify({e:o.e,p,a:o.a||undefined}))),by=lzC(j);let r='';for(let i=0;i<by.length;i+=3){const n=(by[i]<<16)|((by[i+1]||0)<<8)|(by[i+2]||0);r+=B64[n>>18&63]+B64[n>>12&63]+(i+1<by.length?B64[n>>6&63]:'')+(i+2<by.length?B64[n&63]:'')}
+ for(const k of Object.keys(p)){const v=p[k];if(KEEP.has(k))continue;if(isEmp(v))delete p[k]}
+ if(p.dm&&Object.keys(p.dm).every(k=>k=='d'||isEmp(p.dm[k])))delete p.dm;if(p.evd){const q={};for(const k in p.evd)if(!isEmp(p.evd[k]))q[k]=p.evd[k];if(Object.keys(q).length)p.evd=q;else delete p.evd}
+ if(p.ts)p.ts=Math.floor(p.ts/1000).toString(36);const j=unescape(encodeURIComponent(JSON.stringify({e:o.e,p,a:o.a||undefined}))),by=lzC(j);let r='';for(let i=0;i<by.length;i+=3){const n=(by[i]<<16)|((by[i+1]||0)<<8)|(by[i+2]||0);r+=B64[n>>18&63]+B64[n>>12&63]+(i+1<by.length?B64[n>>6&63]:'')+(i+2<by.length?B64[n&63]:'')}
  return 'TD2:'+r}
 const dec=c=>{try{c=c.trim();if(c.slice(0,4)=='TD1:'){const o=JSON.parse(decodeURIComponent(escape(atob(c.slice(4)))));return o&&o.p&&typeof o.p.gem=='number'?o:null}
  if(c.slice(0,4)!='TD2:')return null;const t=c.slice(4),by=[];let acc=0,ab=0;for(let i=0;i<t.length;i++){acc=(acc<<6)|B64.indexOf(t[i]);ab+=6;if(ab>=8){ab-=8;by.push((acc>>ab)&255)}}
- const o=JSON.parse(decodeURIComponent(escape(lzD(by))));for(const k of ['tw','ar','ul'])if(typeof o.p[k]=='string')o.p[k]=up2(o.p[k]);return o&&o.p&&typeof o.p.gem=='number'?o:null}catch(_){return null}};
+ const o=JSON.parse(decodeURIComponent(escape(lzD(by))));for(const k of ['tw','ar','ul'])if(typeof o.p[k]=='string')o.p[k]=up2(o.p[k]);if(typeof o.p.ts=='string')o.p.ts=parseInt(o.p.ts,36)*1000;return o&&o.p&&typeof o.p.gem=='number'?o:null}catch(_){return null}};
 function sheet(t,h){const el=document.createElement('div');el.id='inf';el.innerHTML=`<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">${t}</h3><button id="ic" style="padding:6px 12px">✕</button></div>${h}</div>`;el.onclick=e=>{if(e.target===el||e.target.id=='ic')el.remove()};document.body.appendChild(el);return el}
 const TA='width:100%;height:120px;margin-top:8px;box-sizing:border-box;background:#0b120e;color:#efe6cf;border:1px solid #2b3f33;border-radius:8px;padding:8px;font-size:12px';
-function sx(){let ac=null;try{ac=localStorage.getItem(ACK+EM)}catch(_){}const c=enc({e:EM,p:P,a:ac}),base=location.origin+location.pathname;sheet('저장 코드',`<small>다른 기기의 "저장 코드로 이어하기"에 붙여넣으면 진행 상황이 옮겨져요. 코드는 본인만 보관하세요.</small><textarea id="cd" readonly style="${TA}">${c}</textarea><button class="gold" id="cp" style="width:100%;margin-top:8px;padding:12px">코드 복사</button><div style="margin-top:14px"><b>🔗 새 링크로 옮기기</b><br><small>게임 주소가 바뀌었다면 새 주소를 넣고 만든 링크로 접속하세요. 열면 진행도가 자동으로 이어져요.</small><input id="nl" placeholder="https://새-주소" style="width:100%;margin-top:6px"><button id="cl2" style="width:100%;margin-top:6px;padding:10px">이어하기 링크 복사</button></div>`);
+function sx(){let ac=null;try{ac=localStorage.getItem(ACK+EM)}catch(_){}const c=enc({e:EM,p:P,a:(SRV&&SRV.ok)||typeof claude!='undefined'?null:ac}),base=location.origin+location.pathname;sheet('저장 코드',`<small>다른 기기의 "저장 코드로 이어하기"에 붙여넣으면 진행 상황이 옮겨져요. 코드는 본인만 보관하세요.</small><textarea id="cd" readonly style="${TA}">${c}</textarea><button class="gold" id="cp" style="width:100%;margin-top:8px;padding:12px">코드 복사</button><div style="margin-top:14px"><b>🔗 새 링크로 옮기기</b><br><small>게임 주소가 바뀌었다면 새 주소를 넣고 만든 링크로 접속하세요. 열면 진행도가 자동으로 이어져요.</small><input id="nl" placeholder="https://새-주소" style="width:100%;margin-top:6px"><button id="cl2" style="width:100%;margin-top:6px;padding:10px">이어하기 링크 복사</button></div>`);
  $('cl2').onclick=()=>{let b=($('nl').value||'').trim()||base;b=b.split('#')[0];const u=b+'#'+c;try{navigator.clipboard.writeText(u);$('cl2').textContent='링크 복사됨 ✓'}catch(_){$('nl').value=u;$('nl').select();$('cl2').textContent='위 칸의 링크를 복사하세요'}};
  $('cp').onclick=()=>{$('cd').select();try{navigator.clipboard.writeText(c)}catch(_){try{document.execCommand('copy')}catch(__){}}$('cp').textContent='복사됨 ✓'}}
 function sm(login){const el=sheet('저장 코드로 이어하기',`<small>다른 기기에서 복사한 코드를 붙여넣으세요.${login?'':'<br>현재 진행 상황은 덮어써져요.'}</small><textarea id="cd" style="${TA}"></textarea><div id="ce" style="color:#e5584a;min-height:18px;margin:6px 0;font-size:13px"></div><button class="gold" id="ca" style="width:100%;padding:12px">적용</button>`);
@@ -527,7 +559,7 @@ function tsk(){P.skg=P.skg?0:1;save();render()}
 const MSW=m=>`style="--a:${m.a};--r:${m.r}"`;
 function render(){document.body.classList.toggle('nofx',!!P.nfx);
  const lv=lvOf(P.xp);
- $('lt').innerHTML=`<div id="av">${esc((P.nick||EM)[0]||'?').toUpperCase()}</div><div class="who"><b>${esc(P.nick||(EM=='guest'?'게스트':EM))}</b><div class="xp"><i style="width:${lv.need?lv.cur/lv.need*100:100}%"></i></div><small>Lv.${lv.L}${lv.need?' · EXP '+lv.cur+'/'+lv.need:' · MAX'}</small></div><div class="pill">💎 ${P.gem.toLocaleString()}</div><span title="${SY==1?'클라우드 동기화됨':SY==2?'동기화 실패':'이 기기에만 저장'}">${SY==1?'☁️':SY==2?'⚠️':'💾'}</span>`;
+ $('lt').innerHTML=`<div id="av" onclick="acView()" style="cursor:pointer">${esc((P.nick||EM)[0]||'?').toUpperCase()}</div><div class="who" onclick="acView()" style="cursor:pointer"><b>${esc(P.nick||(EM=='guest'?'게스트':EM))}</b><div class="xp"><i style="width:${lv.need?lv.cur/lv.need*100:100}%"></i></div><small>Lv.${lv.L}${lv.need?' · EXP '+lv.cur+'/'+lv.need:' · MAX'}</small><small style="display:block;opacity:.7;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px">${acInfo().i} ${EM=='guest'?'게스트':esc(EM)}</small></div><div class="pill">💎 ${P.gem.toLocaleString()}</div><span title="${SY==1?'클라우드 동기화됨':SY==2?'동기화 실패':'이 기기에만 저장'}">${SY==1?'☁️':SY==2?'⚠️':'💾'}</span>`;
  const NV=[['play','🏰','전투',['play'],0],['tw','🔮','소환',['tw','ar'],0],['deck','🛡️','편성',['deck'],0],['box','📖','도감',['box','dex'],0],['ev','🎁','이벤트',['ev'],evBadge()],['fr','👥','친구',['fr'],frBadge()]];
  $('tabs').innerHTML=NV.map(([k,i,n,al,bd])=>`<button class="${al.includes(tab)?'on':''}" onclick="tab='${k}';R=[];msg='';dmsg='';render()"><b>${i}</b>${n}${bd?'<i class="dot"></i>':''}</button>`).join('');
  let h='';
